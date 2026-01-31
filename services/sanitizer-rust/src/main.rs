@@ -12,18 +12,20 @@ fn main() -> redis::RedisResult<()> {
     println!("[*] Waiting for data in queue 'raw_html'...");
 
     loop {
-        // FIX: Changed '0' to '0.0' because Rust requires a float for timeout
         let result: Option<(String, String)> = con.blpop("raw_html", 0.0)?;
 
         if let Some((_key, raw_html)) = result {
-            println!("[!] Received {} bytes. Scrubbing...", raw_html.len());
+            println!("[!] Received {} bytes...", raw_html.len());
 
-            // 2. Sanitize HTML
-            let clean_text = cleaner::clean_html(&raw_html);
-
-            // 3. Push to 'sanitized_text'
-            let _: () = con.lpush("sanitized_text", &clean_text)?;
-            println!("[+] Data scrubbed & moved to 'sanitized_text'");
+            // 2. Clean and Check for Junk
+            if let Some(clean_text) = cleaner::clean_html(&raw_html) {
+                // 3. Push ONLY if it's good data
+                let _: () = con.lpush("sanitized_text", &clean_text)?;
+                println!("[+] Valid Data ({} chars) -> Moved to 'sanitized_text'", clean_text.len());
+            } else {
+                // 4. Drop the junk
+                println!("[-] Dropped junk data (Too short/Empty).");
+            }
         }
     }
 }
