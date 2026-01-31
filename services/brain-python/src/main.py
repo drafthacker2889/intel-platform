@@ -2,6 +2,7 @@ import time
 import json
 import redis
 import spacy
+from datetime import datetime  # <--- NEW IMPORT
 from elasticsearch import Elasticsearch
 
 # --- CONFIGURATION ---
@@ -20,10 +21,11 @@ def connect_to_elastic():
     return Elasticsearch(ELASTIC_HOST, request_timeout=60)
 
 def extract_entities(text):
-    """Uses NLP to find People, Orgs, and Locations"""
+    """Uses NLP to find People, Orgs, Locations, and Money"""
     doc = nlp(text[:100000]) # Limit to 100k chars to prevent crashes
     entities = []
     for ent in doc.ents:
+        # Preserved "MONEY" from original code
         if ent.label_ in ["PERSON", "ORG", "GPE", "MONEY"]:
             entities.append({"text": ent.text, "type": ent.label_})
     return entities
@@ -34,9 +36,9 @@ def main():
     r = connect_to_redis()
     es = connect_to_elastic()
 
-    # Create index with mapping for nested objects (if needed later)
-    if not es.indices.exists(index="intel-data-v2"):
-        es.indices.create(index="intel-data-v2")
+    # Create index with mapping for nested objects (Updated to v3 for new timestamp format)
+    if not es.indices.exists(index="intel-data-v3"):
+        es.indices.create(index="intel-data-v3")
 
     print("[*] Waiting for SCRUBBED data in 'sanitized_text'...")
 
@@ -56,12 +58,14 @@ def main():
                 "content": clean_text[:5000], # Store snippet
                 "entities": entities,         # The detected People/Orgs
                 "entity_count": len(entities),
-                "timestamp": time.time()
+                # FIX: Send ISO formatted string so Elastic sees it as a DATE
+                "timestamp": datetime.utcnow().isoformat()
             }
 
             # 4. Index to Elastic
             try:
-                res = es.index(index="intel-data-v2", document=doc)
+                # We use 'intel-data-v3' to avoid conflicts with the old bad index
+                res = es.index(index="intel-data-v3", document=doc)
                 print(f"[+] INTELLIGENCE CAPTURED! Found {len(entities)} entities.")
             except Exception as e:
                 print(f"[-] Indexing Failed: {e}")
