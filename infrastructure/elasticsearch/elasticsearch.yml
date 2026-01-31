@@ -1,0 +1,18 @@
+cluster.name: "docker-cluster"
+network.host: 0.0.0.0
+
+# --- MEMORY & PERFORMANCE ---
+# Lock memory to prevent swapping (Crucial for speed)
+bootstrap.memory_lock: true
+
+# --- DISCOVERY ---
+discovery.type: single-node
+
+# --- SECURITY (TIER 1 DEV MODE) ---
+# We disable these for now to avoid the 'login loop' issues you faced
+xpack.security.enabled: false
+xpack.security.enrollment.enabled: false
+
+# --- HTTP SETTINGS ---
+http.cors.enabled: true
+http.cors.allow-origin: "*"
