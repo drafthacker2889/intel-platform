@@ -7,4 +7,4 @@ edition = "2021"
 redis = "0.24.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-ammonia = "3.3.0" # The HTML sanitizer library
+ammonia = "3.3.0"
