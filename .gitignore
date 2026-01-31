@@ -1,0 +1,16 @@
+# --- Secrets & Configs ---
+.env
+*.pem
+*.key
+
+# --- Dependencies ---
+node_modules/
+__pycache__/
+*.pyc
+venv/
+target/
+
+# --- Heavy Data (DO NOT UPLOAD) ---
+es_data/
+neo4j_data/
+redis_data/
