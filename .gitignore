@@ -2,6 +2,7 @@
 .env
 *.pem
 *.key
+.env.*
 
 # --- Dependencies ---
 node_modules/
@@ -9,8 +10,18 @@ __pycache__/
 *.pyc
 venv/
 target/
+dist/
+build/
+coverage/
+.pytest_cache/
 
 # --- Heavy Data (DO NOT UPLOAD) ---
 es_data/
 neo4j_data/
 redis_data/
+
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

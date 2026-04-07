@@ -1,0 +1,83 @@
+services:
+  elasticsearch:
+    ports: []
+    expose:
+      - "9200"
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - xpack.security.enabled=true
+      - xpack.security.transport.ssl.enabled=false
+
+  kibana:
+    ports: []
+    expose:
+      - "5601"
+    environment:
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+
+  neo4j:
+    ports: []
+    expose:
+      - "7474"
+      - "7687"
+
+  redis:
+    ports: []
+    expose:
+      - "6379"
+
+  tor-proxy:
+    ports: []
+    expose:
+      - "9050"
+
+  dashboard-ui:
+    ports: []
+    expose:
+      - "80"
+
+  gateway:
+    build:
+      context: ./infrastructure/nginx
+    container_name: intel_gateway
+    ports:
+      - "8080:80"
+    environment:
+      - ACTIVE_UI_UPSTREAM=${ACTIVE_UI_UPSTREAM:-dashboard-ui:80}
+    depends_on:
+      - dashboard-ui
+      - kibana
+      - brain-python
+      - auth-api
+    networks:
+      - intel_net
+    restart: unless-stopped
+
+  auth-api:
+    build:
+      context: ./services/auth-api
+    container_name: intel_auth
+    environment:
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-change-me-in-production}
+      - AUTH_TOKEN_EXPIRY_HOURS=${AUTH_TOKEN_EXPIRY_HOURS:-24}
+      - AUTH_PORT=8084
+      - AUTH_ADMIN_USER=${RBAC_ADMIN_USER:-admin}
+      - AUTH_ADMIN_PASSWORD=${RBAC_ADMIN_PASSWORD:-admin-secret}
+    expose:
+      - "8084"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8084/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - intel_net
+    restart: unless-stopped
+
+networks:
+  intel_net:
+    driver: bridge

@@ -1,0 +1,50 @@
+name: Policy
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  compose-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render merged compose config
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.observability.yml config > merged-compose.yml
+      - name: Run compose policies
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/project \
+            openpolicyagent/conftest:v0.56.0 \
+            test /project/merged-compose.yml -p /project/policy/compose
+
+  kubernetes-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Kubernetes policies
+        run: |
+          if ! find k8s -name '*.yml' -o -name '*.yaml' 2>/dev/null | grep -q .; then
+            echo "No Kubernetes manifests found, skipping."
+            exit 0
+          fi
+          docker run --rm \
+            -v ${{ github.workspace }}:/project \
+            openpolicyagent/conftest:v0.56.0 \
+            test /project/k8s/ -p /project/policy/kubernetes
+
+  terraform-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Terraform policies
+        run: |
+          if ! find terraform -name '*.tf' 2>/dev/null | grep -q .; then
+            echo "No Terraform files found, skipping."
+            exit 0
+          fi
+          docker run --rm \
+            -v ${{ github.workspace }}:/project \
+            openpolicyagent/conftest:v0.56.0 \
+            test /project/terraform/ -p /project/policy/terraform \
+            --parser hcl2 --ignore=".terraform"

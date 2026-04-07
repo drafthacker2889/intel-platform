@@ -1,16 +1,24 @@
 #!/bin/bash
-echo "?? Setting up Intel Platform Environment..."
+set -euo pipefail
 
-# Create necessary data folders so Docker doesn't complain
+echo "Setting up Intel Platform environment..."
+
 mkdir -p es_data neo4j_data redis_data
 
-# Create a default .env file if it doesn't exist
 if [ ! -f .env ]; then
-  echo "ELASTIC_PASSWORD=changeme123" > .env
-  echo "NEO4J_PASSWORD=changeme123" >> .env
-  echo "?  .env file created."
+  if [ -f .env.example ]; then
+    cp .env.example .env
+    echo "Created .env from .env.example"
+  else
+    {
+      echo "ELASTIC_PASSWORD=changeme-dev"
+      echo "NEO4J_PASSWORD=changeme-dev"
+      echo "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    } > .env
+    echo "Created .env with fallback defaults"
+  fi
 else
-  echo "??  .env file already exists."
+  echo ".env already exists"
 fi
 
-echo "?? Setup complete. Run 'docker-compose up --build' to start."
+echo "Setup complete. Run 'docker compose up --build' to start."

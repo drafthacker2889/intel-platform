@@ -1,0 +1,74 @@
+[
+  {
+    "name": "benign-content",
+    "text": "Community update about public events and schedules.",
+    "entities": [],
+    "expected_label": "LOW"
+  },
+  {
+    "name": "benign-news",
+    "text": "The weather forecast for the upcoming week shows sunny skies across the region.",
+    "entities": [],
+    "expected_label": "LOW"
+  },
+  {
+    "name": "benign-tech",
+    "text": "Open source contributors met for the annual code sprint and discussed documentation improvements.",
+    "entities": [],
+    "expected_label": "LOW"
+  },
+  {
+    "name": "single-sensitive-keyword",
+    "text": "The password was mentioned in the incident notes.",
+    "entities": [],
+    "expected_label": "MEDIUM"
+  },
+  {
+    "name": "single-keyword-admin",
+    "text": "An admin console was found exposed on the staging server.",
+    "entities": [],
+    "expected_label": "MEDIUM"
+  },
+  {
+    "name": "entity-only-medium",
+    "text": "The quarterly report was reviewed by the compliance team.",
+    "entities": [{"text": "Alice", "type": "PERSON"}, {"text": "Acme Corp", "type": "ORG"}],
+    "expected_label": "MEDIUM"
+  },
+  {
+    "name": "high-risk-keywords-and-entity",
+    "text": "Admin login secret leaked for Alice.",
+    "entities": [{"text": "Alice", "type": "PERSON"}],
+    "expected_label": "HIGH"
+  },
+  {
+    "name": "high-risk-multi-keyword",
+    "text": "The leaked password and secret key were found in the public repository.",
+    "entities": [],
+    "expected_label": "HIGH"
+  },
+  {
+    "name": "high-risk-entity-heavy",
+    "text": "Login credentials discovered related to operations in multiple countries.",
+    "entities": [{"text": "Alice", "type": "PERSON"}, {"text": "ACME", "type": "ORG"}, {"text": "Berlin", "type": "GPE"}],
+    "expected_label": "HIGH"
+  },
+  {
+    "name": "critical-risk-dense-secrets",
+    "text": "password admin login secret confidential leaked db_pass key admin secret",
+    "entities": [],
+    "expected_label": "CRITICAL"
+  },
+  {
+    "name": "critical-entity-dense",
+    "text": "password admin secret leaked db_pass key for multiple accounts across organizations.",
+    "entities": [{"text": "Alice", "type": "PERSON"}, {"text": "Bob", "type": "PERSON"}, {"text": "Evil Corp", "type": "ORG"}, {"text": "Moscow", "type": "GPE"}],
+    "expected_label": "CRITICAL"
+  },
+  {
+    "name": "critical-max-signal",
+    "text": "confidential password admin secret key login leaked db_pass credentials exposed in full dump.",
+    "entities": [{"text": "CIA", "type": "ORG"}, {"text": "Agent", "type": "PERSON"}],
+    "expected_label": "CRITICAL"
+  }
+]

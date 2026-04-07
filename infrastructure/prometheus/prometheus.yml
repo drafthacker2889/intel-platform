@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['prometheus:9090']
+
+  - job_name: 'collector-metrics'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['collector-go:8081']
+
+  - job_name: 'brain-metrics'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['brain-python:8082']
+
+  - job_name: 'sanitizer-metrics'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['sanitizer-rust:8083']

@@ -1,0 +1,38 @@
+name: Chaos
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  redis-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run redis recovery chaos suite
+        run: bash tests/chaos/redis_recovery.sh
+
+  elasticsearch-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run elasticsearch recovery chaos suite
+        run: bash tests/chaos/elasticsearch_recovery.sh
+
+  network-partition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run network partition chaos suite
+        run: bash tests/chaos/network_partition.sh
+
+  cascading-failure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run cascading failure chaos suite
+        run: bash tests/chaos/cascading_failure.sh

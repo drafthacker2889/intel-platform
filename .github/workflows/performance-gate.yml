@@ -1,0 +1,56 @@
+name: Performance Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  load-and-slo-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SLO_TARGET: "0.999"
+      BURN_RATE_LIMIT: "2.0"
+      BASE_URL: "http://localhost:8080"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start platform stack
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            -f docker-compose.observability.yml \
+            up -d --build
+
+      - name: Wait for gateway health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "${BASE_URL}/health" >/dev/null; then
+              echo "Gateway is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Gateway did not become healthy in time"
+          exit 1
+
+      - name: Run k6 load probe
+        run: |
+          docker run --rm --network host \
+            -e BASE_URL="${BASE_URL}" \
+            -v "${{ github.workspace }}:/work" \
+            grafana/k6:0.52.0 \
+            run /work/tests/perf/gateway-health.js \
+            --summary-export=/work/tests/perf/k6-summary.json
+
+      - name: Evaluate SLO burn rate gate
+        run: python3 scripts/evaluate_burn_rate.py tests/perf/k6-summary.json
+
+      - name: Show compose status on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.observability.yml ps
+
+      - name: Stop stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.observability.yml down -v

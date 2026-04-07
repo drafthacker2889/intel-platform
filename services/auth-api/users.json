@@ -1,0 +1,7 @@
+{
+  "users": [
+    {"username": "admin", "password": "admin-secret", "role": "admin"},
+    {"username": "analyst", "password": "analyst-secret", "role": "analyst"},
+    {"username": "viewer", "password": "viewer-secret", "role": "viewer"}
+  ]
+}

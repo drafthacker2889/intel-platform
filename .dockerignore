@@ -1,0 +1,10 @@
+.git
+.gitignore
+**/node_modules
+**/target
+**/__pycache__
+**/*.pyc
+es_data
+neo4j_data
+redis_data
+.env

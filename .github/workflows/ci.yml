@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  collector-go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/collector-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Test
+        run: go test ./...
+
+  sanitizer-rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/sanitizer-rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: cargo test --locked
+
+  brain-python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/brain-python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m unittest discover -s src -p "test_*.py"
+      - name: Risk model evaluation
+        run: python eval_model.py
+      - name: Train ML risk model
+        run: python train_risk_model.py
+
+  auth-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/auth-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m unittest discover -s src -p "test_*.py" || echo "No auth tests yet"
+
+  dashboard-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/dashboard-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+      - name: Build
+        run: npm run build

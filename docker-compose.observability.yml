@@ -1,0 +1,66 @@
+services:
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: intel_tempo
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./infrastructure/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+    ports:
+      - "3200:3200"
+    networks:
+      - intel_net
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    container_name: intel_otel_collector
+    command: ["--config=/etc/otelcol/collector.conf"]
+    volumes:
+      - ./infrastructure/otel/collector.conf:/etc/otelcol/collector.conf:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - tempo
+    networks:
+      - intel_net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: intel_prometheus
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - intel_net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: intel_grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+      - tempo
+    networks:
+      - intel_net
+    restart: unless-stopped
+
+  collector-go:
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_SERVICE_NAME=collector-go
+
+  brain-python:
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_SERVICE_NAME=brain-python
+
+networks:
+  intel_net:
+    driver: bridge

@@ -1,0 +1,33 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  dashboard-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/dashboard-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+  container-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy FS scan
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            aquasec/trivy:0.52.2 \
+            fs --severity CRITICAL,HIGH --ignore-unfixed /workspace

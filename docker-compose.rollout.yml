@@ -1,0 +1,20 @@
+services:
+  dashboard-ui-green:
+    build:
+      context: ./services/dashboard-ui
+    container_name: intel_dashboard_green
+    expose:
+      - "80"
+    networks:
+      - intel_net
+    restart: unless-stopped
+
+  gateway:
+    environment:
+      - ACTIVE_UI_UPSTREAM=${ACTIVE_UI_UPSTREAM:-dashboard-ui:80}
+      - GATEWAY_AUTH_USER=${GATEWAY_AUTH_USER:-inteladmin}
+      - GATEWAY_AUTH_PASSWORD=${GATEWAY_AUTH_PASSWORD:-changeme-prod}
+
+networks:
+  intel_net:
+    driver: bridge

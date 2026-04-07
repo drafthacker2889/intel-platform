@@ -1,33 +1,34 @@
-version: '3.8'
+x-restart-policy: &default-restart
+  restart: unless-stopped
 
 services:
-  # 1. Elasticsearch (The Search Engine)
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
     container_name: intel_elastic
     environment:
       - discovery.type=single-node
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=${ES_JAVA_OPTS}"
-      - "cluster.routing.allocation.disk.threshold_enabled=false"
-      - "cluster.routing.allocation.disk.watermark.low=99%"
-      - "cluster.routing.allocation.disk.watermark.high=99%"
-      - "cluster.routing.allocation.disk.watermark.flood_stage=99%"
-      - "xpack.security.authc.api_key.enabled=true"
+      - xpack.security.authc.api_key.enabled=true
+      - ES_JAVA_OPTS=${ES_JAVA_OPTS}
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - cluster.routing.allocation.disk.watermark.low=99%
+      - cluster.routing.allocation.disk.watermark.high=99%
+      - cluster.routing.allocation.disk.watermark.flood_stage=99%
     volumes:
       - ./es_data:/usr/share/elasticsearch/data
+      - ./infrastructure/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
     ports:
       - "9200:9200"
     networks:
       - intel_net
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
-      interval: 30s
+      interval: 20s
       timeout: 10s
-      retries: 5
+      retries: 8
+      start_period: 30s
+    <<: *default-restart
 
-  # 2. Kibana (The Dashboard)
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.9
     container_name: intel_kibana
@@ -35,47 +36,139 @@ services:
       - "5601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=elastic
-      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     networks:
       - intel_net
+    <<: *default-restart
 
-  # 3. Neo4j (The Graph DB)
   neo4j:
     image: neo4j:4.4
     container_name: intel_graph
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_dbms_memory_heap_initial__size=256m
+      - NEO4J_dbms_memory_heap_max__size=1g
     volumes:
       - ./neo4j_data:/data
+      - ./infrastructure/neo4j/apoc.conf:/var/lib/neo4j/conf/apoc.conf:ro
     ports:
-      - "7474:7474" # HTTP UI
-      - "7687:7687" # Bolt Protocol
+      - "7474:7474"
+      - "7687:7687"
     networks:
       - intel_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null || exit 1"]
+      interval: 25s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+    <<: *default-restart
 
-  # 4. Redis (The Queue)
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
     container_name: intel_queue
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
     ports:
       - "6379:6379"
     volumes:
       - ./redis_data:/data
     networks:
       - intel_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    <<: *default-restart
 
-  # 5. Tor Proxy (The Anonymity Network)
   tor-proxy:
     image: dperson/torproxy
     container_name: intel_tor
     ports:
       - "9050:9050"
       - "9051:9051"
+    volumes:
+      - ./infrastructure/tor/torrc:/etc/tor/torrc:ro
     networks:
       - intel_net
+    <<: *default-restart
+
+  collector-go:
+    build:
+      context: ./services/collector-go
+    container_name: intel_collector
+    environment:
+      - REDIS_ADDR=redis:6379
+      - TOR_PROXY=socks5://tor-proxy:9050
+      - START_URL=${START_URL:-https://www.torproject.org}
+      - ALLOWED_DOMAINS=${ALLOWED_DOMAINS:-www.torproject.org,support.torproject.org,community.torproject.org}
+      - RAW_QUEUE_NAME=${RAW_QUEUE_NAME:-raw_html}
+      - RAW_DLQ_QUEUE=${RAW_DLQ_QUEUE:-raw_html_dlq}
+      - MAX_PAGES=${MAX_PAGES:-250}
+      - HEALTH_PORT=8081
+    depends_on:
+      redis:
+        condition: service_healthy
+      tor-proxy:
+        condition: service_started
+    networks:
+      - intel_net
+    <<: *default-restart
+
+  sanitizer-rust:
+    build:
+      context: ./services/sanitizer-rust
+    container_name: intel_sanitizer
+    environment:
+      - REDIS_URL=redis://redis:6379/
+      - RAW_QUEUE_NAME=${RAW_QUEUE_NAME:-raw_html}
+      - RAW_DLQ_QUEUE=${RAW_DLQ_QUEUE:-raw_html_dlq}
+      - SANITIZED_QUEUE_NAME=${SANITIZED_QUEUE_NAME:-sanitized_text}
+      - SANITIZED_DLQ_QUEUE=${SANITIZED_DLQ_QUEUE:-sanitized_text_dlq}
+      - MIN_TEXT_LEN=${MIN_TEXT_LEN:-80}
+      - HEALTH_PORT=8083
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - intel_net
+    <<: *default-restart
+
+  brain-python:
+    build:
+      context: ./services/brain-python
+    container_name: intel_brain
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ELASTIC_HOST=http://elasticsearch:9200
+      - SANITIZED_QUEUE_NAME=${SANITIZED_QUEUE_NAME:-sanitized_text}
+      - SANITIZED_DLQ_QUEUE=${SANITIZED_DLQ_QUEUE:-sanitized_text_dlq}
+      - ELASTIC_INDEX=${ELASTIC_INDEX:-intel-data-v3}
+      - HEALTH_PORT=8082
+    depends_on:
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - intel_net
+    <<: *default-restart
+
+  dashboard-ui:
+    build:
+      context: ./services/dashboard-ui
+    container_name: intel_dashboard
+    ports:
+      - "3000:80"
+    depends_on:
+      brain-python:
+        condition: service_started
+    networks:
+      - intel_net
+    <<: *default-restart
 
 networks:
   intel_net:
