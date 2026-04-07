@@ -1,5 +1,5 @@
 redis==5.0.1
-elasticsearch==8.11.0
+elasticsearch==9.3.0
 beautifulsoup4==4.12.2
 requests==2.31.0
 spacy==3.7.2
