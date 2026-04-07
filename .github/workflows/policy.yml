@@ -8,7 +8,7 @@ jobs:
   compose-policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Render merged compose config
         run: docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.observability.yml config > merged-compose.yml
       - name: Run compose policies
@@ -21,7 +21,7 @@ jobs:
   kubernetes-policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run Kubernetes policies
         run: |
           if ! find k8s -name '*.yml' -o -name '*.yaml' 2>/dev/null | grep -q .; then
@@ -36,7 +36,7 @@ jobs:
   terraform-policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run Terraform policies
         run: |
           if ! find terraform -name '*.tf' 2>/dev/null | grep -q .; then

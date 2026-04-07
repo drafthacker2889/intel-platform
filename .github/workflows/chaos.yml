@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run redis recovery chaos suite
         run: bash tests/chaos/redis_recovery.sh
 
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run elasticsearch recovery chaos suite
         run: bash tests/chaos/elasticsearch_recovery.sh
 
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run network partition chaos suite
         run: bash tests/chaos/network_partition.sh
 
@@ -33,6 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run cascading failure chaos suite
         run: bash tests/chaos/cascading_failure.sh

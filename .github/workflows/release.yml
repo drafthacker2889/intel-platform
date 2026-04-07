@@ -10,7 +10,7 @@ jobs:
   build-images:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate compose manifests
         run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config >/dev/null
       - name: Build stack images
