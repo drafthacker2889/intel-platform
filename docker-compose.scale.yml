@@ -1,0 +1,233 @@
+version: '3.8'
+
+# Multi-instance crawler orchestration with load-balanced queues
+# Run with: docker compose -f docker-compose.scale.yml up
+# Scale with: docker compose -f docker-compose.scale.yml up --scale collector-python=5
+
+x-restart-policy: &default-restart
+  restart: unless-stopped
+
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # Shared Redis (persistent queue + dedup store)
+  redis:
+    image: redis:7-alpine
+    container_name: redis_shared
+    command: >
+      redis-server
+      --appendonly yes
+      --save 60 1
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis_data:/data
+    networks:
+      - crawler_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    mem_limit: 2500m
+    cpus: "1.0"
+    <<: [*default-restart, *default-logging]
+
+  # Tor proxy (shared across all crawler instances)
+  tor-proxy:
+    image: dperson/torproxy
+    container_name: tor_shared
+    ports:
+      - "9050:9050"
+      - "9051:9051"
+    volumes:
+      - ./infrastructure/tor/torrc:/etc/tor/torrc:ro
+    networks:
+      - crawler_net
+    healthcheck:
+      test: ["CMD-SHELL", "echo -e 'AUTHENTICATE \"\"\r\nSIGNAL NEWNYM\r\nQUIT' | nc -w 3 localhost 9051 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    mem_limit: 256m
+    cpus: "0.5"
+    <<: [*default-restart, *default-logging]
+
+  # Load balancer / entry point
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_lb
+    volumes:
+      - ./infrastructure/nginx/nginx-scale.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - collector-python
+    networks:
+      - crawler_net
+    mem_limit: 128m
+    cpus: "0.25"
+    <<: [*default-restart, *default-logging]
+
+  # === SCALABLE COLLECTOR INSTANCES ===
+  # Each instance processes work from the shared Redis queue independently
+  # Deduplication is centralized in Redis
+  # Circuit rotation (Tor) is load-balanced
+  collector-python:
+    build:
+      context: ./services/collector-python
+    environment:
+      # Shared infrastructure
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - TOR_PROXY=socks5://tor-proxy:9050
+      
+      # Work queues (shared across all instances)
+      - CRAWL_URL_QUEUE=${RAW_QUEUE_NAME:-raw_html}
+      - SANITIZED_QUEUE_NAME=${SANITIZED_QUEUE_NAME:-sanitized_text}
+      
+      # Crawler config (can vary per instance for A/B testing)
+      - START_URL=${START_URL:-https://www.torproject.org}
+      - ALLOWED_DOMAINS=${ALLOWED_DOMAINS:-www.torproject.org,support.torproject.org}
+      - PLAYWRIGHT_TIMEOUT_MS=30000
+      - CAPTCHA_SOLVER_ENABLED=${CAPTCHA_SOLVER_ENABLED:-true}
+      - CAPTCHA_2_KEY=${CAPTCHA_2_KEY}
+      
+      # Instance identifier (for metrics/logging)
+      - INSTANCE_ID=collector-${HOSTNAME}
+      - HEALTH_PORT=8081
+    depends_on:
+      redis:
+        condition: service_healthy
+      tor-proxy:
+        condition: service_healthy
+    networks:
+      - crawler_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 1g
+    cpus: "1.0"
+    <<: [*default-restart, *default-logging]
+
+  # === SUPPORTING SERVICES ===
+  
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+    container_name: es_shared
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - ./es_data:/usr/share/elasticsearch/data
+    networks:
+      - crawler_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qv '\"status\":\"red\"'"]
+      interval: 20s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+    mem_limit: 1g
+    cpus: "1.0"
+    <<: [*default-restart, *default-logging]
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.9
+    container_name: kibana_shared
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - crawler_net
+    mem_limit: 512m
+    cpus: "0.5"
+    <<: [*default-restart, *default-logging]
+
+  neo4j:
+    image: neo4j:4.4
+    container_name: neo4j_shared
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_dbms_memory_heap_initial__size=256m
+      - NEO4J_dbms_memory_heap_max__size=1g
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - ./neo4j_data:/data
+    networks:
+      - crawler_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null || exit 1"]
+      interval: 25s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+    mem_limit: 1500m
+    cpus: "1.0"
+    <<: [*default-restart, *default-logging]
+
+  # Brain/ML processor (single instance, processes all crawled data)
+  brain-python:
+    build:
+      context: ./services/brain-python
+    container_name: brain_shared
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - ELASTIC_HOST=http://elasticsearch:9200
+      - NEO4J_URI=neo4j://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - SANITIZED_QUEUE_NAME=${SANITIZED_QUEUE_NAME:-sanitized_text}
+      - HEALTH_PORT=8082
+    depends_on:
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+      - crawler_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 1g
+    cpus: "1.0"
+    <<: [*default-restart, *default-logging]
+
+networks:
+  crawler_net:
+    driver: bridge
+
+volumes:
+  redis_data:
+  es_data:
+  neo4j_data:

@@ -1,0 +1,81 @@
+groups:
+  - name: intel-platform
+    interval: 30s
+    rules:
+
+      # --- Service availability ---
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.job }} for 2+ minutes."
+
+      # --- Brain indexing failures ---
+      - alert: BrainHighIndexFailures
+        expr: increase(brain_index_failures_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Brain is failing to index documents"
+          description: "More than 10 Elasticsearch index failures in the last 5 minutes."
+
+      - alert: BrainIndexFailuresCritical
+        expr: increase(brain_index_failures_total[5m]) > 50
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Brain index failure rate is critical"
+          description: "More than 50 Elasticsearch index failures in 5 minutes — pipeline may be stalled."
+
+      # --- DLQ backlog ---
+      - alert: DLQGrowing
+        expr: increase(brain_dlq_push_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead-letter queue is filling up"
+          description: "Brain pushed {{ $value }} messages to the DLQ in the last 5 minutes."
+
+      # --- Crawler stall ---
+      - alert: CollectorNotVisitingPages
+        expr: increase(collector_pages_visited_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Collector has not visited any pages in 10 minutes"
+          description: "The crawler may be stalled or blocked."
+
+      - alert: CollectorQueueErrors
+        expr: increase(collector_queue_push_errors_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Collector is failing to push to Redis"
+          description: "{{ $value }} queue push errors in the last 5 minutes."
+
+      # --- Sanitizer errors ---
+      - alert: SanitizerHighErrors
+        expr: increase(sanitizer_errors_total[5m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sanitizer Redis error rate is elevated"
+          description: "{{ $value }} sanitizer errors in the last 5 minutes."
+
+      - alert: SanitizerHighDropRate
+        expr: rate(sanitizer_dropped_total[5m]) / (rate(sanitizer_processed_total[5m]) + rate(sanitizer_dropped_total[5m]) + 0.001) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sanitizer is dropping more than 50% of messages"
+          description: "High drop rate may indicate junk content or misconfigured MIN_TEXT_LEN."

@@ -7,13 +7,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	mrand "math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"crawler/internal"
@@ -31,10 +34,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var pagesVisitedTotal atomic.Int64
+var pagesVisitedTotal    atomic.Int64
 var queuePushErrorsTotal atomic.Int64
-var crawlErrorsTotal atomic.Int64
-var dlqPushTotal atomic.Int64
+var crawlErrorsTotal     atomic.Int64
+var dlqPushTotal         atomic.Int64
+
+var (
+	_visitedURLs   = make(map[string]bool)
+	_visitedURLsMu sync.RWMutex
+)
 
 var userAgents = []string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36",
@@ -55,8 +63,7 @@ func parseDomains(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		trimmed := strings.TrimSpace(p)
-		if trimmed != "" {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
 			out = append(out, trimmed)
 		}
 	}
@@ -83,7 +90,8 @@ func traceparentFromSpanContext(spanContext trace.SpanContext) string {
 	if spanContext.TraceFlags().IsSampled() {
 		flags = "01"
 	}
-	return fmt.Sprintf("00-%s-%s-%s", spanContext.TraceID().String(), spanContext.SpanID().String(), flags)
+	return fmt.Sprintf("00-%s-%s-%s",
+		spanContext.TraceID().String(), spanContext.SpanID().String(), flags)
 }
 
 func initTracerProvider(ctx context.Context, serviceName string) (*sdktrace.TracerProvider, error) {
@@ -92,20 +100,19 @@ func initTracerProvider(ctx context.Context, serviceName string) (*sdktrace.Trac
 		return nil, nil
 	}
 
-	exporter, err := otlptracegrpc.New(
-		ctx,
-		otlptracegrpc.WithEndpoint(endpoint),
-		otlptracegrpc.WithInsecure(),
-	)
+	opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(endpoint)}
+	// Only disable TLS when the endpoint is explicitly plaintext.
+	if strings.HasPrefix(endpoint, "http://") {
+		opts = append(opts, otlptracegrpc.WithInsecure())
+	}
+
+	exporter, err := otlptracegrpc.New(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := resource.New(
-		ctx,
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String(serviceName),
-		),
+	res, err := resource.New(ctx,
+		resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)),
 	)
 	if err != nil {
 		return nil, err
@@ -128,9 +135,12 @@ func runHealthServer(port string, maxPages int) {
 	})
 	handler.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		_, _ = fmt.Fprintf(
-			w,
-			"collector_pages_visited_total %d\ncollector_queue_push_errors_total %d\ncollector_crawl_errors_total %d\ncollector_dlq_push_total %d\ncollector_max_pages %d\n",
+		_, _ = fmt.Fprintf(w,
+			"collector_pages_visited_total %d\n"+
+				"collector_queue_push_errors_total %d\n"+
+				"collector_crawl_errors_total %d\n"+
+				"collector_dlq_push_total %d\n"+
+				"collector_max_pages %d\n",
 			pagesVisitedTotal.Load(),
 			queuePushErrorsTotal.Load(),
 			crawlErrorsTotal.Load(),
@@ -142,28 +152,36 @@ func runHealthServer(port string, maxPages int) {
 }
 
 func main() {
-	redisAddr := envOrDefault("REDIS_ADDR", "localhost:6379")
-	torProxy := envOrDefault("TOR_PROXY", "socks5://127.0.0.1:9050")
-	otelServiceName := envOrDefault("OTEL_SERVICE_NAME", "collector-go")
-	startURL := envOrDefault("START_URL", "https://www.torproject.org")
-	rawQueueName := envOrDefault("RAW_QUEUE_NAME", "raw_html")
-	rawDLQName := envOrDefault("RAW_DLQ_QUEUE", "raw_html_dlq")
-	healthPort := envOrDefault("HEALTH_PORT", "8081")
-	allowedDomains := parseDomains(envOrDefault("ALLOWED_DOMAINS", "www.torproject.org,support.torproject.org,community.torproject.org"))
+	// Structured JSON logging.
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+	redisAddr     := envOrDefault("REDIS_ADDR", "localhost:6379")
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	torProxy      := envOrDefault("TOR_PROXY", "socks5://127.0.0.1:9050")
+	otelSvcName   := envOrDefault("OTEL_SERVICE_NAME", "collector-go")
+	startURL      := envOrDefault("START_URL", "https://www.torproject.org")
+	rawQueueName  := envOrDefault("RAW_QUEUE_NAME", "raw_html")
+	rawDLQName    := envOrDefault("RAW_DLQ_QUEUE", "raw_html_dlq")
+	healthPort    := envOrDefault("HEALTH_PORT", "8081")
+	allowedDomains := parseDomains(envOrDefault("ALLOWED_DOMAINS",
+		"www.torproject.org,support.torproject.org,community.torproject.org"))
 
 	maxPages := 300
 	if s := strings.TrimSpace(os.Getenv("MAX_PAGES")); s != "" {
-		if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 {
+		parsed, err := strconv.Atoi(s)
+		if err != nil || parsed <= 0 {
+			slog.Error("MAX_PAGES is not a positive integer, using default", "value", s, "default", maxPages)
+		} else {
 			maxPages = parsed
 		}
 	}
 
 	go runHealthServer(healthPort, maxPages)
-	fmt.Println("Collector starting")
+	slog.Info("Collector starting", "max_pages", maxPages, "start_url", startURL)
 
-	provider, tracerErr := initTracerProvider(context.Background(), otelServiceName)
+	provider, tracerErr := initTracerProvider(context.Background(), otelSvcName)
 	if tracerErr != nil {
-		fmt.Printf("Collector tracer init failed: %v\n", tracerErr)
+		slog.Error("Tracer init failed", "error", tracerErr)
 	} else if provider != nil {
 		defer func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -173,11 +191,15 @@ func main() {
 	}
 	tracer := otel.Tracer("collector-go")
 
-	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     redisAddr,
+		Password: redisPassword,
+	})
 	if _, err := rdb.Ping(context.Background()).Result(); err != nil {
-		log.Fatalf("Redis unavailable: %v", err)
+		slog.Error("Redis unavailable", "error", err)
+		os.Exit(1)
 	}
-	fmt.Println("Redis connected")
+	slog.Info("Redis connected", "addr", redisAddr)
 
 	c := colly.NewCollector(
 		colly.IgnoreRobotsTxt(),
@@ -187,7 +209,7 @@ func main() {
 
 	c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
-		Parallelism: 2,
+		Parallelism: 16,
 		RandomDelay: 2 * time.Second,
 	})
 
@@ -200,22 +222,26 @@ func main() {
 	internal.SetupTorProxy(c, torProxy)
 	c.SetRequestTimeout(60 * time.Second)
 
-	var visitedCount int64
-
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		link := e.Attr("href")
 		if !internal.IsInterestingLink(link) {
 			return
 		}
-
-		absLink := e.Request.AbsoluteURL(link)
-		if atomic.LoadInt64(&visitedCount) >= int64(maxPages) {
+		if pagesVisitedTotal.Load() >= int64(maxPages) {
 			return
 		}
-
-		if strings.HasPrefix(absLink, "http") {
-			_ = e.Request.Visit(absLink)
+		absLink := e.Request.AbsoluteURL(link)
+		if !strings.HasPrefix(absLink, "http") {
+			return
 		}
+		_visitedURLsMu.Lock()
+		if _visitedURLs[absLink] {
+			_visitedURLsMu.Unlock()
+			return
+		}
+		_visitedURLs[absLink] = true
+		_visitedURLsMu.Unlock()
+		_ = e.Request.Visit(absLink)
 	})
 
 	c.OnResponse(func(r *colly.Response) {
@@ -226,10 +252,15 @@ func main() {
 			attribute.Int("payload.bytes", len(r.Body)),
 		)
 
-		current := atomic.AddInt64(&visitedCount, 1)
-		pagesVisitedTotal.Store(current)
-		fmt.Printf("VISITED %d/%d %s (%d bytes)\n", current, maxPages, r.Request.URL, len(r.Body))
+		current := pagesVisitedTotal.Add(1)
+		slog.Info("Visited page",
+			"index", current,
+			"max", maxPages,
+			"url", r.Request.URL.String(),
+			"bytes", len(r.Body),
+		)
 
+		// Discard responses beyond the limit (race window between OnHTML check and here).
 		if current > int64(maxPages) {
 			return
 		}
@@ -244,8 +275,8 @@ func main() {
 		if err != nil {
 			queuePushErrorsTotal.Add(1)
 			span.RecordError(err)
-			span.SetStatus(codes.Error, "collector payload marshal failed")
-			fmt.Printf("Collector payload marshal error: %v\n", err)
+			span.SetStatus(codes.Error, "payload marshal failed")
+			slog.Error("Payload marshal error", "error", err)
 			return
 		}
 
@@ -254,15 +285,16 @@ func main() {
 			queuePushErrorsTotal.Add(1)
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "redis lpush failed")
-			fmt.Printf("Redis LPush error: %v\n", err)
+			slog.Error("Redis LPush error", "error", err, "queue", rawQueueName)
 			dlqPayload := map[string]string{
 				"error":       err.Error(),
 				"raw_payload": string(serializedPayload),
 				"failed_at":   time.Now().UTC().Format(time.RFC3339Nano),
 			}
-			marshaledDLQ, marshalErr := json.Marshal(dlqPayload)
-			if marshalErr == nil {
-				if pushErr := rdb.LPush(context.Background(), rawDLQName, marshaledDLQ).Err(); pushErr == nil {
+			if marshaledDLQ, marshalErr := json.Marshal(dlqPayload); marshalErr == nil {
+				if pushErr := rdb.LPush(context.Background(), rawDLQName, marshaledDLQ).Err(); pushErr != nil {
+					slog.Error("DLQ push failed", "error", pushErr)
+				} else {
 					dlqPushTotal.Add(1)
 				}
 			}
@@ -276,19 +308,41 @@ func main() {
 		span.SetStatus(codes.Error, "collector request failed")
 		if r != nil && r.Request != nil {
 			span.SetAttributes(attribute.String("source.url", r.Request.URL.String()))
+			slog.Error("Crawl error", "url", r.Request.URL.String(), "error", err)
+		} else {
+			slog.Error("Crawl error", "error", err)
 		}
 		span.End()
-		if r != nil && r.Request != nil {
-			fmt.Println("ERROR", r.Request.URL, err)
-			return
-		}
-		fmt.Println("ERROR", err)
 	})
 
-	fmt.Println("Seeding crawler with", startURL)
+	// Graceful shutdown on SIGTERM / SIGINT.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+
+	slog.Info("Seeding crawler", "url", startURL)
 	if err := c.Visit(startURL); err != nil {
-		log.Fatalf("could not start crawler: %v", err)
+		slog.Error("Could not start crawler", "error", err)
+		os.Exit(1)
 	}
-	c.Wait()
-	fmt.Println("Crawl finished")
+
+	// Wait for crawl to finish or a 30-minute hard timeout, whichever comes first.
+	crawlDone := make(chan struct{})
+	go func() {
+		c.Wait()
+		close(crawlDone)
+	}()
+
+	crawlTimeout := time.Duration(maxPages) * 30 * time.Second
+	if crawlTimeout > 30*time.Minute {
+		crawlTimeout = 30 * time.Minute
+	}
+
+	select {
+	case <-crawlDone:
+		slog.Info("Crawl finished")
+	case <-time.After(crawlTimeout):
+		slog.Warn("Crawl timed out", "timeout", crawlTimeout.String())
+	case sig := <-sigCh:
+		slog.Info("Shutdown signal received", "signal", sig.String())
+	}
 }

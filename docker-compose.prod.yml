@@ -15,6 +15,7 @@ services:
     environment:
       - ELASTICSEARCH_USERNAME=elastic
       - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
 
   neo4j:
     ports: []
@@ -26,6 +27,7 @@ services:
     ports: []
     expose:
       - "6379"
+    # Password is already set via REDIS_PASSWORD in docker-compose.yml command block.
 
   tor-proxy:
     ports: []
@@ -46,24 +48,30 @@ services:
     environment:
       - ACTIVE_UI_UPSTREAM=${ACTIVE_UI_UPSTREAM:-dashboard-ui:80}
     depends_on:
-      - dashboard-ui
-      - kibana
-      - brain-python
-      - auth-api
+      dashboard-ui:
+        condition: service_healthy
+      auth-api:
+        condition: service_healthy
     networks:
       - intel_net
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   auth-api:
     build:
       context: ./services/auth-api
     container_name: intel_auth
     environment:
-      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-change-me-in-production}
-      - AUTH_TOKEN_EXPIRY_HOURS=${AUTH_TOKEN_EXPIRY_HOURS:-24}
+      # AUTH_SECRET_KEY must be set in .env — no default accepted in production.
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
+      - AUTH_TOKEN_EXPIRY_HOURS=${AUTH_TOKEN_EXPIRY_HOURS:-4}
       - AUTH_PORT=8084
-      - AUTH_ADMIN_USER=${RBAC_ADMIN_USER:-admin}
-      - AUTH_ADMIN_PASSWORD=${RBAC_ADMIN_PASSWORD:-admin-secret}
+      - AUTH_ADMIN_USER=${RBAC_ADMIN_USER}
+      - AUTH_ADMIN_PASSWORD=${RBAC_ADMIN_PASSWORD}
     expose:
       - "8084"
     healthcheck:
@@ -77,6 +85,11 @@ services:
     networks:
       - intel_net
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   intel_net:

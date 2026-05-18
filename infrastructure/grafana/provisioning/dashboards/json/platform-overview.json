@@ -13,13 +13,13 @@
       "type": "stat",
       "title": "Collector Health",
       "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0},
-      "targets": [{"expr": "up{job='collector-health'}"}]
+      "targets": [{"expr": "up{job='collector-metrics'}"}]
     },
     {
       "type": "stat",
       "title": "Brain Health",
       "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0},
-      "targets": [{"expr": "up{job='brain-health'}"}]
+      "targets": [{"expr": "up{job='brain-metrics'}"}]
     }
   ],
   "schemaVersion": 39,

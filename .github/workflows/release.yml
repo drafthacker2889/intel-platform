@@ -7,11 +7,35 @@ on:
       - 'v*.*.*'
 
 jobs:
-  build-images:
+  build-and-push:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Validate compose manifests
         run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config >/dev/null
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version tag
+        id: meta
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
       - name: Build stack images
         run: docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+
+      - name: Push images to registry
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml push \
+            collector-go sanitizer-rust brain-python auth-api dashboard-ui
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          generate_release_notes: true

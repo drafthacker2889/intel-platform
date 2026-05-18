@@ -2,7 +2,10 @@
 .env
 *.pem
 *.key
-.env.*
+.env.local
+.env.development
+.env.production
+.env.staging
 
 # --- Dependencies ---
 node_modules/
