@@ -1,3 +1,4 @@
+User tor
 SocksPort 0.0.0.0:9050
-ControlPort 0.0.0.0:9051
+ControlPort 127.0.0.1:9051
 DataDirectory /var/lib/tor

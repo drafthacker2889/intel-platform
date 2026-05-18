@@ -233,6 +233,7 @@ def index_mapping(schema_version, model_version):
                 "content":              {"type": "text"},
                 "entities": {
                     "type": "nested",
+                    "dynamic": True,
                     "properties": {
                         "text":     {"type": "keyword"},
                         "type":     {"type": "keyword"},

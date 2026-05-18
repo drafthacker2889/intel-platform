@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import redis
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from crawler import PlaywrightCrawler
 from dedup import DedupManager
@@ -38,7 +38,9 @@ logger = logging.getLogger("collector-python")
 
 class Config(BaseSettings):
     """Collector configuration from environment."""
-    REDIS_ADDR: str = "localhost:6379"
+    REDIS_ADDR: Optional[str] = None
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
     REDIS_PASSWORD: Optional[str] = None
     REDIS_DB: int = 0
     
@@ -64,9 +66,7 @@ class Config(BaseSettings):
     
     HEALTH_PORT: int = 8081
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 
 async def main():
@@ -75,9 +75,15 @@ async def main():
     
     # Redis connection
     try:
+        redis_host = config.REDIS_HOST
+        redis_port = config.REDIS_PORT
+        if config.REDIS_ADDR and ":" in config.REDIS_ADDR:
+            redis_host, redis_port_raw = config.REDIS_ADDR.split(":", 1)
+            redis_port = int(redis_port_raw)
+
         r = redis.Redis(
-            host=config.REDIS_ADDR.split(":")[0],
-            port=int(config.REDIS_ADDR.split(":")[1]),
+            host=redis_host,
+            port=redis_port,
             password=config.REDIS_PASSWORD,
             db=config.REDIS_DB,
             decode_responses=True,

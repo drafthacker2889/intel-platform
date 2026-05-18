@@ -9,11 +9,25 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download multilingual spaCy models
-RUN python -m spacy download en_core_web_sm && \
-    python -m spacy download ru_core_news_sm && \
-    python -m spacy download zh_core_web_sm && \
-    python -m spacy download de_core_news_sm
+# Download multilingual spaCy models when available.
+# Builds should still succeed in restricted/offline environments.
+RUN python - <<'PY'
+from spacy.cli import download
+
+models = [
+    "en_core_web_sm",
+    "ru_core_news_sm",
+    "zh_core_web_sm",
+    "de_core_news_sm",
+]
+
+for model in models:
+    try:
+        download(model)
+        print(f"Installed spaCy model: {model}")
+    except Exception as exc:
+        print(f"Skipping spaCy model {model}: {exc}")
+PY
 
 # Copy source and training artefacts.
 COPY src/           ./src/

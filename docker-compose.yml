@@ -66,10 +66,11 @@ services:
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
       - NEO4J_dbms_memory_heap_initial__size=256m
-      - NEO4J_dbms_memory_heap_max__size=1g
+      - NEO4J_dbms_memory_heap_max__size=512m
+      - NEO4J_dbms_memory_pagecache_size=256m
     volumes:
       - ./neo4j_data:/data
-      - ./infrastructure/neo4j/apoc.conf:/var/lib/neo4j/conf/apoc.conf:ro
+      - ./infrastructure/neo4j/apoc.conf:/var/lib/neo4j/conf/apoc.conf
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -146,7 +147,7 @@ services:
       redis:
         condition: service_healthy
       tor-proxy:
-        condition: service_healthy
+        condition: service_started
     networks:
       - intel_net
     healthcheck:
@@ -207,7 +208,7 @@ services:
       redis:
         condition: service_healthy
       tor-proxy:
-        condition: service_healthy
+        condition: service_started
     networks:
       - intel_net
     healthcheck:
@@ -250,7 +251,7 @@ services:
     networks:
       - intel_net
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8082/health', timeout=5)\" || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 5
@@ -267,7 +268,7 @@ services:
       - "3000:80"
     depends_on:
       brain-python:
-        condition: service_healthy
+        condition: service_started
     networks:
       - intel_net
     healthcheck:
@@ -292,7 +293,7 @@ services:
       - ./postgres_data:/var/lib/postgresql/data
       - ./scripts/init_postgres_dedup.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     ports:
-      - "5432:5432"
+      - "5433:5432"
     networks:
       - intel_net
     healthcheck:

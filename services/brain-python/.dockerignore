@@ -15,4 +15,3 @@ models/
 .env.*
 *.md
 tests/
-evals/

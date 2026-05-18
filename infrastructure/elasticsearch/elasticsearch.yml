@@ -11,7 +11,6 @@ discovery.type: single-node
 # xpack.security is enabled in prod via docker-compose.prod.yml environment override.
 # Dev-only: leave security disabled but NEVER use this config in production.
 xpack.security.enabled: false
-xpack.security.enrollment.enabled: false
 
 # --- HTTP SETTINGS ---
 # CORS is disabled; the Nginx gateway is the only entry point.

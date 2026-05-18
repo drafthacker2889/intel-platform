@@ -66,6 +66,8 @@ class LinkExtractor:
     
     def _is_allowed_domain(self, domain: str, allowed_domains: Set[str]) -> bool:
         """Check if domain is in allowed list (supports wildcards)."""
+        if "*" in allowed_domains:
+            return True
         for allowed in allowed_domains:
             if domain == allowed or domain.endswith("." + allowed):
                 return True

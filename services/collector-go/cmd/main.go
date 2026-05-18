@@ -163,8 +163,10 @@ func main() {
 	rawQueueName  := envOrDefault("RAW_QUEUE_NAME", "raw_html")
 	rawDLQName    := envOrDefault("RAW_DLQ_QUEUE", "raw_html_dlq")
 	healthPort    := envOrDefault("HEALTH_PORT", "8081")
-	allowedDomains := parseDomains(envOrDefault("ALLOWED_DOMAINS",
-		"www.torproject.org,support.torproject.org,community.torproject.org"))
+	rawAllowedDomains := envOrDefault("ALLOWED_DOMAINS",
+		"www.torproject.org,support.torproject.org,community.torproject.org")
+	allowedDomains := parseDomains(rawAllowedDomains)
+	allowAllDomains := len(allowedDomains) == 1 && allowedDomains[0] == "*"
 
 	maxPages := 300
 	if s := strings.TrimSpace(os.Getenv("MAX_PAGES")); s != "" {
@@ -201,11 +203,14 @@ func main() {
 	}
 	slog.Info("Redis connected", "addr", redisAddr)
 
-	c := colly.NewCollector(
+	collectorOpts := []colly.CollectorOption{
 		colly.IgnoreRobotsTxt(),
-		colly.AllowedDomains(allowedDomains...),
 		colly.Async(true),
-	)
+	}
+	if !allowAllDomains {
+		collectorOpts = append(collectorOpts, colly.AllowedDomains(allowedDomains...))
+	}
+	c := colly.NewCollector(collectorOpts...)
 
 	c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",

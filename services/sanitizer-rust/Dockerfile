@@ -1,5 +1,7 @@
-FROM rust:1.79-alpine AS builder
+FROM rust:1.86-alpine AS builder
 WORKDIR /app
+
+RUN apk add --no-cache musl-dev gcc
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
