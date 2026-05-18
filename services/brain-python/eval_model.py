@@ -1,7 +1,9 @@
 import json
+import sys
 from pathlib import Path
 
-from src.main import calculate_risk
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+from src.main import calculate_risk  # noqa: E402
 
 
 ROOT = Path(__file__).parent
