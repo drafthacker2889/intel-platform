@@ -7,7 +7,7 @@ Supports independent models trained on language-specific threat data.
 
 import logging
 import os
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from pathlib import Path
 
 import joblib
@@ -43,8 +43,8 @@ class LanguageModelRouter:
         """
         self.model_path = Path(model_path)
         self.logger = logger
-        self._models = {}      # Cache: lang_code -> model
-        self._scalers = {}     # Cache: lang_code -> scaler
+        self._models: Dict[str, Any] = {}      # Cache: lang_code -> model
+        self._scalers: Dict[str, Any] = {}     # Cache: lang_code -> scaler
         
         # Load default model (English) first
         self._load_model("en")

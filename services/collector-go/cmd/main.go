@@ -34,10 +34,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var pagesVisitedTotal    atomic.Int64
+var pagesVisitedTotal atomic.Int64
 var queuePushErrorsTotal atomic.Int64
-var crawlErrorsTotal     atomic.Int64
-var dlqPushTotal         atomic.Int64
+var crawlErrorsTotal atomic.Int64
+var dlqPushTotal atomic.Int64
 
 var (
 	_visitedURLs   = make(map[string]bool)
@@ -155,14 +155,14 @@ func main() {
 	// Structured JSON logging.
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	redisAddr     := envOrDefault("REDIS_ADDR", "localhost:6379")
+	redisAddr := envOrDefault("REDIS_ADDR", "localhost:6379")
 	redisPassword := os.Getenv("REDIS_PASSWORD")
-	torProxy      := envOrDefault("TOR_PROXY", "socks5://127.0.0.1:9050")
-	otelSvcName   := envOrDefault("OTEL_SERVICE_NAME", "collector-go")
-	startURL      := envOrDefault("START_URL", "https://www.torproject.org")
-	rawQueueName  := envOrDefault("RAW_QUEUE_NAME", "raw_html")
-	rawDLQName    := envOrDefault("RAW_DLQ_QUEUE", "raw_html_dlq")
-	healthPort    := envOrDefault("HEALTH_PORT", "8081")
+	torProxy := envOrDefault("TOR_PROXY", "socks5://127.0.0.1:9050")
+	otelSvcName := envOrDefault("OTEL_SERVICE_NAME", "collector-go")
+	startURL := envOrDefault("START_URL", "https://www.torproject.org")
+	rawQueueName := envOrDefault("RAW_QUEUE_NAME", "raw_html")
+	rawDLQName := envOrDefault("RAW_DLQ_QUEUE", "raw_html_dlq")
+	healthPort := envOrDefault("HEALTH_PORT", "8081")
 	rawAllowedDomains := envOrDefault("ALLOWED_DOMAINS",
 		"www.torproject.org,support.torproject.org,community.torproject.org")
 	allowedDomains := parseDomains(rawAllowedDomains)
@@ -212,11 +212,14 @@ func main() {
 	}
 	c := colly.NewCollector(collectorOpts...)
 
-	c.Limit(&colly.LimitRule{
+	if err := c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
 		Parallelism: 16,
 		RandomDelay: 2 * time.Second,
-	})
+	}); err != nil {
+		slog.Error("Failed to configure crawl limits", "error", err)
+		os.Exit(1)
+	}
 
 	c.OnRequest(func(r *colly.Request) {
 		agent := userAgents[mrand.Intn(len(userAgents))]

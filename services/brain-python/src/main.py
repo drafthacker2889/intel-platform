@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 import redis
@@ -17,21 +18,32 @@ import spacy
 from elasticsearch import Elasticsearch
 from featurize import RISK_KEYWORDS, featurize as _featurize_shared
 
-try:
-    from neo4j_manager import Neo4jGraphManager
-except ImportError:
-    Neo4jGraphManager = None
+if TYPE_CHECKING:
+    from language_pipeline import LanguageModelRouter as LanguageModelRouterType
+    from language_pipeline import LanguagePipeline as LanguagePipelineType
+    from multilingual_nlp import MultilingualNLPManager as MultilingualNLPManagerType
+    from neo4j_manager import Neo4jGraphManager as Neo4jGraphManagerType
+
+Neo4jGraphManagerClass: Any = None
+MultilingualNLPManagerClass: Any = None
+LanguageModelRouterClass: Any = None
+LanguagePipelineClass: Any = None
 
 try:
-    from multilingual_nlp import MultilingualNLPManager
+    from neo4j_manager import Neo4jGraphManager as Neo4jGraphManagerClass
 except ImportError:
-    MultilingualNLPManager = None
+    pass
 
 try:
-    from language_pipeline import LanguageModelRouter, LanguagePipeline
+    from multilingual_nlp import MultilingualNLPManager as MultilingualNLPManagerClass
 except ImportError:
-    LanguageModelRouter = None
-    LanguagePipeline = None
+    pass
+
+try:
+    from language_pipeline import LanguageModelRouter as LanguageModelRouterClass
+    from language_pipeline import LanguagePipeline as LanguagePipelineClass
+except ImportError:
+    pass
 
 # ── Structured JSON logging ────────────────────────────────────────────────────
 logging.basicConfig(
@@ -437,14 +449,14 @@ def run_health_server():
 
 
 # ── Global Neo4j manager ──────────────────────────────────────────────────────
-_neo4j_manager = None
+_neo4j_manager: Any = None
 
 # ── Global Multilingual NLP manager ────────────────────────────────────────────
-_multilingual_nlp = None
+_multilingual_nlp: Any = None
 
 # ── Global Language Model Router ────────────────────────────────────────────────
-_language_router = None
-_language_pipeline = None
+_language_router: Any = None
+_language_pipeline: Any = None
 
 # ── Elasticsearch indexing with exponential backoff ────────────────────────────
 def index_with_retry(es, r, doc, raw_packet, parsed, span, neo4j_mgr=None):
@@ -515,18 +527,18 @@ def main():
     
     # Initialize Neo4j graph manager if available
     global _neo4j_manager
-    if Neo4jGraphManager:
+    if Neo4jGraphManagerClass is not None:
         try:
-            _neo4j_manager = Neo4jGraphManager(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, logger)
+            _neo4j_manager = Neo4jGraphManagerClass(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, logger)
         except Exception as e:
             logger.warning('"Neo4j initialization failed: %s"', e)
             _neo4j_manager = None
     
     # Initialize Multilingual NLP manager if available
     global _multilingual_nlp
-    if MultilingualNLPManager:
+    if MultilingualNLPManagerClass is not None:
         try:
-            _multilingual_nlp = MultilingualNLPManager(logger)
+            _multilingual_nlp = MultilingualNLPManagerClass(logger)
             logger.info('"Multilingual NLP manager initialized"')
         except Exception as e:
             logger.warning('"Multilingual NLP initialization failed: %s"', e)
@@ -534,11 +546,11 @@ def main():
     
     # Initialize Language-Specific Model Router if available
     global _language_router, _language_pipeline
-    if LanguageModelRouter:
+    if LanguageModelRouterClass is not None and LanguagePipelineClass is not None:
         try:
             model_path = Path(os.getenv("RISK_MODEL_PATH", "/app/models")).parent
-            _language_router = LanguageModelRouter(model_path, logger)
-            _language_pipeline = LanguagePipeline(_language_router, logger)
+            _language_router = LanguageModelRouterClass(model_path, logger)
+            _language_pipeline = LanguagePipelineClass(_language_router, logger)
             logger.info('"Language model router initialized"')
         except Exception as e:
             logger.warning('"Language model router initialization failed: %s"', e)

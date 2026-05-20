@@ -6,7 +6,7 @@ Handles: English, Russian, Chinese, German threat intelligence.
 
 import logging
 import os
-from typing import List, Dict, Tuple
+from typing import Any, List, Dict, Tuple
 from functools import lru_cache
 
 import spacy
@@ -40,7 +40,7 @@ class MultilingualNLPManager:
     def __init__(self, logger: logging.Logger, prefer_model: str = "en"):
         self.logger = logger
         self.prefer_model = prefer_model
-        self._models = {}  # Lazy-loaded model cache
+        self._models: Dict[str, Any] = {}  # Lazy-loaded model cache
         self._load_model(prefer_model)  # Pre-load default
     
     def _load_model(self, lang_code: str):
