@@ -15,6 +15,7 @@ Usage:
 """
 
 import json
+import math
 import sys
 from collections import Counter
 from pathlib import Path
@@ -85,9 +86,16 @@ def main():
         count = label_dist.get(label, 0)
         print(f"  {label:10s}: {count:6d} ({100*count/len(y):.1f}%)")
 
-    # ── Train / test split (stratified 80/20) ─────────────────────────────────
+    # ── Train / test split (stratified, but robust for very small datasets) ───
+    num_classes = len(label_dist)
+    test_count = max(num_classes, math.ceil(len(y) * 0.2))
+    max_test_count = len(y) - num_classes
+    if max_test_count <= 0:
+        raise RuntimeError("Not enough samples to create a stratified train/test split.")
+    test_count = min(test_count, max_test_count)
+
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y, test_size=test_count, random_state=42, stratify=y
     )
     print(f"\nTrain: {len(X_train)}  Test: {len(X_test)}")
 
