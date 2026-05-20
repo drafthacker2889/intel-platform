@@ -347,7 +347,16 @@ def calculate_risk(text, entities, lang_code="en"):
     
     # Fallback to rule-based scoring
     text_lower = text.lower()
-    score = sum(20 for w in RISK_KEYWORDS if w in text_lower) + len(entities) * 5
+    keyword_hits = sum(1 for w in RISK_KEYWORDS if w in text_lower)
+    score = keyword_hits * 10 + len(entities) * 5
+
+    # Escalate authentication-related exposure without making any single
+    # sensitive keyword immediately high risk.
+    auth_context_terms = ("login", "credential", "credentials", "auth")
+    if keyword_hits > 0 and any(term in text_lower for term in auth_context_terms):
+        score += 10
+    if keyword_hits >= 4:
+        score += 10
     if score >= 50:
         label = "CRITICAL"
     elif score >= 20:
