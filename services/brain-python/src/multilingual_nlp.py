@@ -70,7 +70,7 @@ class MultilingualNLPManager:
         Returns: (language_code, confidence)
         """
         if not text or len(text.strip()) < 10:
-            return "en", 0.5  # Default to English for short text
+            return "en", 0.3  # Default to English with low confidence for short text
         
         try:
             results = detect_langs(text[:500])

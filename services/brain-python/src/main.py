@@ -347,7 +347,7 @@ def calculate_risk(text, entities, lang_code="en"):
     
     # Fallback to rule-based scoring
     text_lower = text.lower()
-    score = sum(10 for w in RISK_KEYWORDS if w in text_lower) + len(entities) * 5
+    score = sum(20 for w in RISK_KEYWORDS if w in text_lower) + len(entities) * 5
     if score >= 50:
         label = "CRITICAL"
     elif score >= 20:

@@ -253,12 +253,13 @@ class TestMultilingualDataGenerator(unittest.TestCase):
         for lang in ["en", "ru", "zh", "de"]:
             self.assertEqual(by_lang[lang], 100)
         
-        # Check label distribution (roughly)
-        self.assertLess(by_label["CRITICAL"], 15)  # ~10%
-        self.assertGreater(by_label["CRITICAL"], 5)
-        
-        self.assertGreater(by_label["HIGH"], 25)  # ~30%
-        self.assertLess(by_label["HIGH"], 35)
+        # Check label distribution (roughly) across all generated samples
+        total = len(samples)
+        expected_critical = int(total * 0.10)
+        expected_high = int(total * 0.30)
+
+        self.assertLessEqual(abs(by_label["CRITICAL"] - expected_critical), 4)
+        self.assertLessEqual(abs(by_label["HIGH"] - expected_high), 8)
 
 
 if __name__ == "__main__":
