@@ -7,7 +7,8 @@ WORKDIR /app
 
 # Install dependencies first (cached layer — only invalidated when requirements change).
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir --upgrade "pip>=25.0" "setuptools>=78.1.1" "wheel>=0.46.2" "jaraco.context>=6.1.0"
 
 # Download multilingual spaCy models when available.
 # Builds should still succeed in restricted/offline environments.

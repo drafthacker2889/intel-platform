@@ -7,8 +7,13 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
-COPY nginx.default.conf /etc/nginx/conf.d/default.conf
+FROM alpine:3.22
+# Serve with Alpine's nginx package plus a full upgrade. The official
+# nginx:alpine image can lag behind Alpine's security repo, leaving fixed CVEs
+# (e.g. in the nginx package itself) unpatched; building on alpine + apk gets
+# the current patched versions.
+RUN apk add --no-cache nginx && apk upgrade --no-cache
+COPY nginx.default.conf /etc/nginx/http.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
