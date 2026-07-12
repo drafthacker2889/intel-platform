@@ -49,10 +49,11 @@ except ImportError:
 # (extracted from this service). We consume it here to enrich indexed documents
 # with structured indicators. Optional import so the service still starts if the
 # library is absent.
+osintlens_extract_iocs: Any = None
 try:
-    import osintlens
+    from osintlens import extract_iocs as osintlens_extract_iocs
 except ImportError:
-    osintlens = None
+    pass
 
 # ── Structured JSON logging ────────────────────────────────────────────────────
 logging.basicConfig(
@@ -650,8 +651,8 @@ def main():
                 "timestamp":            datetime.now(timezone.utc).isoformat(),
             }
 
-            if osintlens is not None:
-                doc["iocs"] = osintlens.extract_iocs(clean_text)
+            if osintlens_extract_iocs is not None:
+                doc["iocs"] = osintlens_extract_iocs(clean_text)
 
             span.set_attribute("risk.score", risk_score)
             span.set_attribute("risk.label", risk_label)
