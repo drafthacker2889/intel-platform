@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synthreat"
+version = "0.1.0"
+description = "Reproducible synthetic multilingual threat-intelligence datasets (EN/RU/ZH/DE) with risk labels and ground-truth IOCs."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "muhammed shazin sadhik kunhi parambath", email = "shazin2889@gmail.com" }]
+keywords = [
+    "synthetic-data", "threat-intelligence", "dataset", "nlp",
+    "multilingual", "cybersecurity", "machine-learning", "test-data",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+]
+# Zero runtime dependencies — pure Python.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+synthreat = "synthreat.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/shaz-in-dev/intel-platform/tree/main/packages/synthreat"
+Source = "https://github.com/shaz-in-dev/intel-platform/tree/main/packages/synthreat"
+Issues = "https://github.com/shaz-in-dev/intel-platform/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+synthreat = ["py.typed"]

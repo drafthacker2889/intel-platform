@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osintlens"
+version = "0.1.0"
+description = "Multilingual OSINT analysis in a single call: language detection, IOC extraction, entity recognition, and risk scoring."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "muhammed shazin sadhik kunhi parambath", email = "shazin2889@gmail.com" }]
+keywords = [
+    "osint", "threat-intelligence", "ioc", "risk-scoring", "nlp",
+    "multilingual", "cybersecurity", "entity-extraction",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Topic :: Text Processing :: Linguistic",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+]
+# Base install is pure Python with zero runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+# Machine-learned risk scoring over the feature vector.
+ml = ["scikit-learn>=1.1", "joblib>=1.2", "numpy>=1.21"]
+# Fine-grained language detection + spaCy named-entity recognition.
+multilingual = ["langdetect>=1.0.9", "spacy>=3.4"]
+all = ["osintlens[ml,multilingual]"]
+dev = ["pytest>=7", "osintlens[ml,multilingual]"]
+
+[project.scripts]
+osintlens = "osintlens.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/shaz-in-dev/intel-platform/tree/main/packages/osintlens"
+Source = "https://github.com/shaz-in-dev/intel-platform/tree/main/packages/osintlens"
+Issues = "https://github.com/shaz-in-dev/intel-platform/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+osintlens = ["py.typed"]
