@@ -1,0 +1,42 @@
+name: Publish packages to PyPI
+
+# Trusted Publishing (OIDC) — no API tokens stored. Fires when a version tag is
+# pushed (e.g. `git tag v0.1.1 && git push origin v0.1.1`). Each package is
+# built from its subdirectory and published; `skip-existing` means a tag that
+# only bumps one package won't fail on the unchanged one.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [osintlens, synthreat]
+    permissions:
+      id-token: write # required for PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build ${{ matrix.package }}
+        run: |
+          python -m pip install --upgrade build
+          python -m build packages/${{ matrix.package }} --outdir dist
+
+      - name: Publish ${{ matrix.package }} to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          skip-existing: true

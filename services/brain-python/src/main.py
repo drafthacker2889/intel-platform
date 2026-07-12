@@ -45,6 +45,15 @@ try:
 except ImportError:
     pass
 
+# The IOC/risk analysis core is published as the standalone `osintlens` package
+# (extracted from this service). We consume it here to enrich indexed documents
+# with structured indicators. Optional import so the service still starts if the
+# library is absent.
+try:
+    import osintlens
+except ImportError:
+    osintlens = None
+
 # ── Structured JSON logging ────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -640,6 +649,9 @@ def main():
                 "model_version":        MODEL_VERSION,
                 "timestamp":            datetime.now(timezone.utc).isoformat(),
             }
+
+            if osintlens is not None:
+                doc["iocs"] = osintlens.extract_iocs(clean_text)
 
             span.set_attribute("risk.score", risk_score)
             span.set_attribute("risk.label", risk_label)

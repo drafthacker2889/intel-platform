@@ -11,3 +11,4 @@ py2neo==2021.2.4
 opentelemetry-api==1.27.0
 opentelemetry-sdk==1.27.0
 opentelemetry-exporter-otlp-proto-grpc==1.27.0
+osintlens==0.1.0
