@@ -1,6 +1,6 @@
 # synthreat
 
-**Reproducible synthetic threat-intelligence datasets — in four languages.**
+**Reproducible synthetic threat-intelligence datasets, in four languages — by Muhammed Shazin Sadhik Kunhi Parambath.**
 
 Labeled multilingual security-text corpora barely exist. `synthreat` generates
 them on demand: threat-intel sentences in **English, Russian, Chinese, and
@@ -109,7 +109,7 @@ intelligence and should never be presented as genuine threat reporting.
 
 ## Author
 
-Created and maintained by **muhammed shazin sadhik kunhi parambath**.
+Created and maintained by **Muhammed Shazin Sadhik Kunhi Parambath**.
 
 ## License
 

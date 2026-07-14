@@ -1,8 +1,9 @@
 # osintlens
 
-**Multilingual OSINT analysis in a single call.** Point it at a block of text —
-a forum post, a paste, a scraped page — and get back the language, the
-indicators of compromise, the named entities, and an explainable risk verdict.
+**Multilingual OSINT analysis in a single call — by Muhammed Shazin Sadhik Kunhi Parambath.**
+Point it at a block of text — a forum post, a paste, a scraped page — and get
+back the language, the indicators of compromise, the named entities, and an
+explainable risk verdict.
 
 ```python
 import osintlens as ol
@@ -110,7 +111,7 @@ individuals.
 
 ## Author
 
-Created and maintained by **muhammed shazin sadhik kunhi parambath**.
+Created and maintained by **Muhammed Shazin Sadhik Kunhi Parambath**.
 
 ## License
 
